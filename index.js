@@ -93,32 +93,40 @@ bot.command("start", async (ctx) => {
 
       if (!user && receiveid) {
         pool.query(
-          "INSERT INTO users (tgid, mount, friendid) VALUES ($1, $2, $3)",
-          [userid, ctx.from.is_premium === true ? 10000 : 5000, receiveid],
+          "INSERT INTO users (tgid, mount, friendid, avatar_url) VALUES ($1, $2, $3, $4)",
+          [
+            userid,
+            ctx.from.is_premium === true ? 10000 : 5000,
+            receiveid,
+            fileUrl,
+          ],
           async (error) => {
             if (error) throw error;
+
+            // Now, check if the receiveid exists in the users table
             pool.query(
               "SELECT * FROM users WHERE tgid = $1",
               [receiveid],
               (error, results2) => {
                 if (error) throw error;
+
                 let sender = results2.rows[0];
-                if (sender)
-                  sender.mount += ctx.from.is_premium === true ? 10000 : 5000;
-                else {
+                console.log("sender--->", sender);
+
+                if (sender) {
+                  // Update the sender's mount
+                  const newMount =
+                    Number(sender.mount) +
+                    (ctx.from.is_premium === true ? 10000 : 5000);
+
                   pool.query(
                     "UPDATE users SET mount = $1 WHERE tgid = $2",
-                    [
-                      results2.rows[0].mount + ctx.from.is_premium === true
-                        ? 10000
-                        : 5000,
-                      receiveid,
-                    ],
+                    [newMount, receiveid],
                     (error) => {
                       if (error) {
                         throw error;
                       }
-                      return response.json({ user });
+                      console.log("Sender's mount updated:", newMount);
                     }
                   );
                 }
