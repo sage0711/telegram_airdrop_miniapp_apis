@@ -56,22 +56,19 @@ const bot = new Bot(botToken);
 bot.command("start", async (ctx) => {
   const userid = ctx.from.username; // Get the Telegram user ID
   const receiveid = ctx.match;
+  let fileUrl = "";
+
   console.log("ctx.match ----------->", userid);
-  
+
   const photos = await ctx.api.getUserProfilePhotos(ctx.from.id, { limit: 1 });
 
   if (photos.total_count > 0) {
     const file_id = photos.photos[0][0].file_id;
 
     const file = await ctx.api.getFile(file_id);
-    const fileUrl = `https://api.telegram.org/file/bot${botToken}/${file.file_path}`;
+    fileUrl = `https://api.telegram.org/file/bot${botToken}/${file.file_path}`;
 
     console.log("User's avatar URL:", fileUrl);
-
-    await pool.query("UPDATE users SET avatar_url = $1 WHERE tgid = $2", [
-      fileUrl,
-      userid,
-    ]);
   } else {
     console.log("No profile photos found for this user.");
   }
@@ -86,6 +83,14 @@ bot.command("start", async (ctx) => {
       let user = results1.rows[0];
       console.log("ctx.match --->", receiveid);
       console.log("user", user);
+
+      if (!user && !receiveid) {
+        pool.query(
+          "INSERT INTO users (tgid, mount, friendid, avatar_url) VALUES ($1, $2, $3, $4)",
+          [userid, 0, "", fileUrl]
+        );
+      }
+
       if (!user && receiveid) {
         pool.query(
           "INSERT INTO users (tgid, mount, friendid) VALUES ($1, $2, $3)",
