@@ -34,14 +34,15 @@ app.use(logger("dev"));
 
 app.get("/users", db.getUsers);
 app.get("/tasks", db.getTasks);
-app.get("/bonusLevel", db.getBonusLevel);
 app.get("/users/:id", db.getUserById);
+app.get("/bonusLevel", db.getBonusLevel);
+app.get("/bonusLevel/:id", db.getBonusLevelById)
 app.post("/friends", db.getFriends);
 app.post("/users", db.createUser);
 app.post("/bonus", db.bonus);
 app.post("/sendInvite", db.sendInvite);
 app.post("/connect", db.connect);
-app.put('/users', db.updateUser);
+app.put("/users", db.updateUser);
 
 app.get("/", (req, res) => {
   res.send("Express on Vercel, yay");
@@ -55,12 +56,85 @@ const { Bot, InlineKeyboard } = require("grammy");
 const botToken = process.env.BOT_TOKEN;
 const bot = new Bot(botToken);
 
+const getLevelInfo = (count) => {
+  switch (Math.floor(count / 20)) {
+    case 0:
+      return {
+        text: "Rookie",
+        number: 1,
+        image: "/images/lvl-1-rookie.png",
+        lvlcoin: 20,
+      };
+    case 1:
+      return {
+        text: "Bronze",
+        number: 2,
+        image: "/images/lvl-2-bronze.png",
+        lvlcoin: 20,
+      };
+    case 2:
+      return {
+        text: "Silver",
+        number: 3,
+        image: "/images/lvl-3-silver.png",
+        lvlcoin: 20,
+      };
+    case 3:
+      return {
+        text: "Gold",
+        number: 4,
+        image: "/images/lvl-4-gold.png",
+        lvlcoin: 20,
+      };
+    case 4:
+      return {
+        text: "Platinum",
+        number: 5,
+        image: "/images/lvl-5-platinum.png",
+        lvlcoin: 20,
+      };
+    case 5:
+      return {
+        text: "Diamond",
+        number: 6,
+        image: "/images/lvl-6-diamond.png",
+        lvlcoin: 20,
+      };
+    case 6:
+      return {
+        text: "Master",
+        number: 7,
+        image: "/images/lvl-7-master.png",
+        lvlcoin: 20,
+      };
+    case 7:
+      return {
+        text: "Grand Master",
+        number: 8,
+        image: "/images/lvl-8-grand-master.png",
+        lvlcoin: 20,
+      };
+    case 8:
+      return {
+        text: "Lord",
+        number: 9,
+        image: "/images/lvl-9-lord.png",
+        lvlcoin: 20,
+      };
+    default:
+      return {
+        text: "Legendary",
+        number: 10,
+        image: "/images/lvl-10-legendary.png",
+        lvlcoin: 20,
+      };
+  }
+};
+
 bot.command("start", async (ctx) => {
   const userid = ctx.from.username; // Get the Telegram user ID
   const receiveid = ctx.match;
   let fileUrl = "";
-
-  console.log("ctx.match ----------->", userid);
 
   const photos = await ctx.api.getUserProfilePhotos(ctx.from.id, { limit: 1 });
 
@@ -83,7 +157,6 @@ bot.command("start", async (ctx) => {
         throw error;
       }
       let user = results1.rows[0];
-      console.log("ctx.match --->", receiveid);
       console.log("user", user);
 
       if (!user && !receiveid) {
@@ -94,49 +167,66 @@ bot.command("start", async (ctx) => {
       }
 
       if (!user && receiveid) {
+        // First, retrieve the sender's details to determine their current mount value
         pool.query(
-          "INSERT INTO users (tgid, mount, friendid, avatar_url) VALUES ($1, $2, $3, $4)",
-          [
-            userid,
-            ctx.from.is_premium === true ? 10000 : 50,
-            receiveid,
-            fileUrl,
-          ],
-          async (error) => {
+          "SELECT * FROM users WHERE tgid = $1",
+          [receiveid],
+          (error, results) => {
             if (error) throw error;
 
-            // Now, check if the receiveid exists in the users table
+            let sender = results.rows[0];
+
+            // Determine the levelInfo based on the sender's current mount
+            const levelInfo = getLevelInfo(sender ? sender.mount : 0);
+
+            // Query the bonuslevel table to get the stand and premium values for this level
             pool.query(
-              "SELECT * FROM users WHERE tgid = $1",
-              [receiveid],
-              (error, results2) => {
+              "SELECT friend_value, premium_value FROM bonuslevel WHERE level_name = $1",
+              [levelInfo.text],
+              (error, results3) => {
                 if (error) throw error;
 
-                let sender = results2.rows[0];
-                console.log("sender--->", sender);
+                const { friend_value, premium_value } = results3.rows[0];
 
-                if (sender) {
-                  // Update the sender's mount
-                  const newMount =
-                    Number(sender.mount) +
-                    (ctx.from.is_premium === true ? 10000 : 50);
+                // Insert the new user with the correct initial mount value
+                pool.query(
+                  "INSERT INTO users (tgid, mount, friendid, avatar_url) VALUES ($1, $2, $3, $4)",
+                  [
+                    userid,
+                    ctx.from.is_premium === true ? premium_value : friend_value,
+                    receiveid,
+                    fileUrl,
+                  ],
+                  (error) => {
+                    if (error) throw error;
 
-                  pool.query(
-                    "UPDATE users SET mount = $1 WHERE tgid = $2",
-                    [newMount, receiveid],
-                    (error) => {
-                      if (error) {
-                        throw error;
-                      }
-                      console.log("Sender's mount updated:", newMount);
+                    // Now, update the sender's mount value based on their level
+                    if (sender) {
+                      const newMount =
+                        Number(sender.mount) +
+                        (ctx.from.is_premium === true
+                          ? premium_value
+                          : friend_value);
+
+                      pool.query(
+                        "UPDATE users SET mount = $1 WHERE tgid = $2",
+                        [newMount, receiveid],
+                        (error) => {
+                          if (error) {
+                            throw error;
+                          }
+                          console.log("Sender's mount updated:", newMount);
+                        }
+                      );
                     }
-                  );
-                }
+                  }
+                );
               }
             );
           }
         );
       }
+
       const menus = new InlineKeyboard().webApp(
         "Play in 1 click",
         `https://telegram-airdrop-bot-kappa.vercel.app/?user=${encodeURIComponent(
@@ -179,31 +269,6 @@ bot.on("callback_query:data", async (ctx) => {
   await bot.api.deleteWebhook();
   bot.start();
 })();
-
-const getLevelInfo = (count) => {
-  switch (Math.floor(count / 20)) {
-    case 0:
-      return { text: "Bronze", number: 1 };
-    case 1:
-      return { text: "Silver", number: 2 };
-    case 2:
-      return { text: "Platinum", number: 3 };
-    case 3:
-      return { text: "Diamond", number: 4 };
-    case 4:
-      return { text: "Master", number: 5 };
-    case 5:
-      return { text: "Grandmaster", number: 6 };
-    case 6:
-      return { text: "Elite", number: 7 };
-    case 7:
-      return { text: "Legendary", number: 8 };
-    case 8:
-      return { text: "Mythic", number: 9 };
-    default:
-      return { text: "Mythic", number: 9 };
-  }
-};
 
 schedule.scheduleJob(rule, async function () {
   console.log("start reward");

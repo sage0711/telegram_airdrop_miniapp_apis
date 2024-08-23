@@ -65,6 +65,17 @@ const getBonusLevel = (request, response) => {
   });
 };
 
+const getBonusLevelById = (request, response) => {
+  const id = parseInt(request.params.id);
+
+  pool.query("SELECT friend_value, premium_value FROM bonuslevel WHERE level_id = $1", [id], (error, results) => {
+    if (error) {
+      throw error;
+    }
+    response.status(200).json(results.rows);
+  });
+}
+
 const createUser = (request, response) => {
   const { user } = request.body;
   pool.query(
@@ -232,6 +243,7 @@ module.exports = {
   getUserById,
   getFriends,
   getBonusLevel,
+  getBonusLevelById,
   createUser,
   bonus,
   sendInvite,
