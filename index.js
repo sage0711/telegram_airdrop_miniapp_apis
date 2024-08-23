@@ -34,8 +34,8 @@ app.use(logger("dev"));
 
 app.get("/users", db.getUsers);
 app.get("/tasks", db.getTasks);
+app.get("/bonusLevel", db.getBonusLevel);
 app.get("/users/:id", db.getUserById);
-app.get("/bonuslevel", db.getBonuslevel)
 app.post("/friends", db.getFriends);
 app.post("/users", db.createUser);
 app.post("/bonus", db.bonus);

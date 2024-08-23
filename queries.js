@@ -56,15 +56,6 @@ const getFriends = (request, response) => {
   );
 };
 
-const getBonuslevel = (request, response) => {
-  pool.query("SELECT * FROM bonuslevel ORDER BY id ASC", (error, results) => {
-    if (error) {
-      throw error;
-    }
-    response.status(200).json(results.rows);
-  });
-}
-
 const createUser = (request, response) => {
   const { user } = request.body;
   pool.query(
@@ -195,14 +186,23 @@ const connect = async (request, response) => {
   );
 };
 
+const getBonusLevel = (request, response) => {
+  pool.query("SELECT * FROM bonuslevel", (error, result) => {
+    if (error) {
+      throw error;
+    }
+    response.status(200).json(result.rows);
+  });
+};
+
 module.exports = {
   getUsers,
   getTasks,
   getUserById,
   getFriends,
-  getBonuslevel,
   createUser,
   bonus,
   sendInvite,
   connect,
+  getBonusLevel
 };
