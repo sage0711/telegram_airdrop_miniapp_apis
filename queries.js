@@ -2,6 +2,7 @@ const Pool = require("pg").Pool;
 const { addHours } = require("date-fns");
 require("dotenv").config();
 const { Keys } = require("casper-js-sdk");
+const { request, response } = require("express");
 const pool = new Pool({
   user: process.env.PG_USER,
   host: process.env.PG_HOST,
@@ -54,6 +55,15 @@ const getFriends = (request, response) => {
     }
   );
 };
+
+const getBonuslevel = (request, response) => {
+  pool.query("SELECT * FROM bonuslevel ORDER BY id ASC", (error, results) => {
+    if (error) {
+      throw error;
+    }
+    response.status(200).json(results.rows);
+  });
+}
 
 const createUser = (request, response) => {
   const { user } = request.body;
@@ -190,6 +200,7 @@ module.exports = {
   getTasks,
   getUserById,
   getFriends,
+  getBonuslevel,
   createUser,
   bonus,
   sendInvite,

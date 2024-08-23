@@ -35,6 +35,7 @@ app.use(logger("dev"));
 app.get("/users", db.getUsers);
 app.get("/tasks", db.getTasks);
 app.get("/users/:id", db.getUserById);
+app.get("/bonuslevel", db.getBonuslevel)
 app.post("/friends", db.getFriends);
 app.post("/users", db.createUser);
 app.post("/bonus", db.bonus);
@@ -96,7 +97,7 @@ bot.command("start", async (ctx) => {
           "INSERT INTO users (tgid, mount, friendid, avatar_url) VALUES ($1, $2, $3, $4)",
           [
             userid,
-            ctx.from.is_premium === true ? 10000 : 5000,
+            ctx.from.is_premium === true ? 10000 : 50,
             receiveid,
             fileUrl,
           ],
@@ -117,7 +118,7 @@ bot.command("start", async (ctx) => {
                   // Update the sender's mount
                   const newMount =
                     Number(sender.mount) +
-                    (ctx.from.is_premium === true ? 10000 : 5000);
+                    (ctx.from.is_premium === true ? 10000 : 50);
 
                   pool.query(
                     "UPDATE users SET mount = $1 WHERE tgid = $2",
@@ -142,7 +143,7 @@ bot.command("start", async (ctx) => {
         )}`
       );
 
-      await ctx.reply(`Hello, @${userid}! Welcome to Chirpley.`, {
+      await ctx.reply(`Hello, @${userid}! Welcome to Airdrop.`, {
         reply_markup: menus,
         parse_mode: "HTML",
       });
