@@ -56,6 +56,15 @@ const getFriends = (request, response) => {
   );
 };
 
+const getBonusLevel = (request, response) => {
+  pool.query("SELECT * FROM bonuslevel", (error, result) => {
+    if (error) {
+      throw error;
+    }
+    response.status(200).json(result.rows);
+  });
+};
+
 const createUser = (request, response) => {
   const { user } = request.body;
   pool.query(
@@ -186,23 +195,46 @@ const connect = async (request, response) => {
   );
 };
 
-const getBonusLevel = (request, response) => {
-  pool.query("SELECT * FROM bonuslevel", (error, result) => {
-    if (error) {
-      throw error;
+const updateUser = async (request, response) => {
+  const { user, mount } = request.body;
+
+  try {
+    // Check if user exists
+    const userResult = await pool.query("SELECT * FROM users WHERE tgid = $1", [
+      user,
+    ]);
+
+    if (userResult.rows.length === 0) {
+      // User does not exist, so create a new user
+      await pool.query(
+        "INSERT INTO users (tgid, mount, friendid) VALUES ($1, $2, $3)",
+        [user, 0, ""]
+      );
+      return response.status(201).json({ message: "User created successfully" });
     }
-    response.status(200).json(result.rows);
-  });
-};
+
+    // Update the mount value for the user
+    await pool.query("UPDATE users SET mount = $1 WHERE tgid = $2", [
+      mount,
+      user,
+    ]);
+
+    response.status(200).json({ message: "Mount updated successfully" });
+  } catch (error) {
+    console.error("Failed to update mount", error);
+    response.status(500).json({ error: "Failed to update mount" });
+  }
+}
 
 module.exports = {
   getUsers,
   getTasks,
   getUserById,
   getFriends,
+  getBonusLevel,
   createUser,
   bonus,
   sendInvite,
   connect,
-  getBonusLevel
+  updateUser
 };

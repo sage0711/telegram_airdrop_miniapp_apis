@@ -41,6 +41,7 @@ app.post("/users", db.createUser);
 app.post("/bonus", db.bonus);
 app.post("/sendInvite", db.sendInvite);
 app.post("/connect", db.connect);
+app.put('/users', db.updateUser);
 
 app.get("/", (req, res) => {
   res.send("Express on Vercel, yay");
@@ -234,35 +235,4 @@ schedule.scheduleJob(rule, async function () {
       }
     );
   });
-});
-
-app.put("/users", async (req, res) => {
-  const { user, mount } = req.body;
-
-  try {
-    // Check if user exists
-    const userResult = await pool.query("SELECT * FROM users WHERE tgid = $1", [
-      user,
-    ]);
-
-    if (userResult.rows.length === 0) {
-      // User does not exist, so create a new user
-      await pool.query(
-        "INSERT INTO users (tgid, mount, friendid) VALUES ($1, $2, $3)",
-        [user, 0, ""]
-      );
-      return res.status(201).json({ message: "User created successfully" });
-    }
-
-    // Update the mount value for the user
-    await pool.query("UPDATE users SET mount = $1 WHERE tgid = $2", [
-      mount,
-      user,
-    ]);
-
-    res.status(200).json({ message: "Mount updated successfully" });
-  } catch (error) {
-    console.error("Failed to update mount", error);
-    res.status(500).json({ error: "Failed to update mount" });
-  }
 });
