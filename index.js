@@ -303,12 +303,13 @@ schedule.scheduleJob(rule, async function () {
 });
 
 app.post('/raffle', async (req, res) => {
-  const { userId } = req.body;
+  const { userId, useCoins } = req.body; // Accept a flag to indicate if coins should be used
   console.log("userId", userId);
 
   try {
-    const userQuery = await pool.query('SELECT * FROM users WHERE tgid = $1', [userId]);
+    const userQuery = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
     const user = userQuery.rows[0];
+    console.log("user-=-=-=", user)
 
     if (!user) return res.status(404).json({ message: 'User not found' });
 
@@ -321,7 +322,12 @@ app.post('/raffle', async (req, res) => {
 
     // Check if the user can participate in the raffle
     if (raffle && hoursSinceLastDraw < 24 && raffle.draw_count >= 3) {
-      return res.status(403).json({ message: 'No more draws available today' });
+      if (useCoins && user.mount >= 10000) { // Require at least 10,000 coins to draw
+        // Deduct coins from user
+        await pool.query('UPDATE users SET mount = mount - 10000 WHERE id = $1', [userId]);
+      } else {
+        return res.status(403).json({ message: 'No more draws available today or insufficient coins' });
+      }
     } else if (!raffle || hoursSinceLastDraw >= 24) {
       // Create a new raffle entry if none exists or if 24 hours have passed
       const newRaffleQuery = await pool.query(
@@ -343,3 +349,5 @@ app.post('/raffle', async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 });
+
+
