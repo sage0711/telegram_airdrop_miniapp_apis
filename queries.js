@@ -237,94 +237,6 @@ const updateUser = async (request, response) => {
   }
 }
 
-const checkRaffleStatus = (req, res) => {
-  const { userId } = req.query;
-  pool.query(
-    'SELECT * FROM raffle_history WHERE user_id = $1',
-    [userId],
-    (error, results) => {
-      if (error) {
-        throw error;
-      }
-      const data = results.rows[0];
-      if (data) {
-        const lastDrawTime = new Date(data.last_draw);
-        const now = new Date();
-        const timeDifference = (now - lastDrawTime) / (1000 * 60 * 60); // Time difference in hours
-        const freeDrawsLeft = timeDifference >= 24 ? 3 : 3 - data.draw_count;
-        res.json({
-          freeDrawsLeft: freeDrawsLeft > 0 ? freeDrawsLeft : 0,
-          nextFreeDrawTime: timeDifference >= 24 ? 0 : 24 - timeDifference,
-        });
-      } else {
-        // No entry in raffle_history means the user is new
-        res.json({
-          freeDrawsLeft: 3,
-          nextFreeDrawTime: 0,
-        });
-      }
-    }
-  );
-};
-
-// Perform a raffle draw
-const performRaffleDraw = (req, res) => {
-  const { userId, useCoins } = req.body;
-
-  // Check user's raffle history
-  pool.query(
-    'SELECT * FROM raffle_history WHERE user_id = $1',
-    [userId],
-    (error, results) => {
-      if (error) {
-        throw error;
-      }
-      const data = results.rows[0];
-      let drawCount = data ? data.draw_count : 0;
-      let lastDrawTime = data ? new Date(data.last_draw) : null;
-      const now = new Date();
-
-      if (data && ((now - lastDrawTime) / (1000 * 60 * 60) < 24 && drawCount >= 3)) {
-        if (!useCoins) {
-          // User has used all free draws for the day
-          res.status(403).json({ message: "No free draws left" });
-          return;
-        }
-        // Deduct coins logic here
-      } else {
-        // User can draw
-        if (data) {
-          if ((now - lastDrawTime) / (1000 * 60 * 60) >= 24) {
-            // Reset draw count after 24 hours
-            drawCount = 0;
-          }
-          pool.query(
-            'UPDATE raffle_history SET draw_count = $1, last_draw = $2 WHERE user_id = $3',
-            [drawCount + 1, now, userId]
-          );
-        } else {
-          pool.query(
-            'INSERT INTO raffle_history (user_id, draw_count, last_draw) VALUES ($1, $2, $3)',
-            [userId, 1, now]
-          );
-        }
-      }
-
-      // Determine raffle result
-      const raffleResult = Math.floor(Math.random() * 100) + 1; // Random result between 1 and 100
-      let coinsWon = raffleResult <= 33 ? 100 : raffleResult <= 66 ? 500 : 1000; // Example logic
-
-      // Update user's coins
-      pool.query(
-        'UPDATE users SET mount = mount + $1 WHERE id = $2',
-        [coinsWon, userId]
-      );
-
-      res.json({ result: coinsWon });
-    }
-  );
-};
-
 module.exports = {
   getUsers,
   getTasks,
@@ -337,6 +249,4 @@ module.exports = {
   sendInvite,
   connect,
   updateUser,
-  checkRaffleStatus,
-  performRaffleDraw
 };

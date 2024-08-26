@@ -43,8 +43,6 @@ app.post("/bonus", db.bonus);
 app.post("/sendInvite", db.sendInvite);
 app.post("/connect", db.connect);
 app.put("/users", db.updateUser);
-app.get('/raffle/status', db.checkRaffleStatus);
-app.post('/raffle/draw', db.performRaffleDraw);
 
 app.get("/", (req, res) => {
   res.send("Express on Vercel, yay");
@@ -302,4 +300,46 @@ schedule.scheduleJob(rule, async function () {
       }
     );
   });
+});
+
+app.post('/raffle', async (req, res) => {
+  const { userId } = req.body;
+  console.log("userId", userId);
+
+  try {
+    const userQuery = await pool.query('SELECT * FROM users WHERE tgid = $1', [userId]);
+    const user = userQuery.rows[0];
+
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const raffleQuery = await pool.query('SELECT * FROM raffles WHERE user_id = $1 ORDER BY id DESC LIMIT 1', [userId]);
+    let raffle = raffleQuery.rows.length > 0 ? raffleQuery.rows[0] : null;
+    
+    const now = new Date();
+    const lastDraw = raffle ? new Date(raffle.last_draw) : now;
+    const hoursSinceLastDraw = Math.abs(now - lastDraw) / 36e5;
+
+    // Check if the user can participate in the raffle
+    if (raffle && hoursSinceLastDraw < 24 && raffle.draw_count >= 3) {
+      return res.status(403).json({ message: 'No more draws available today' });
+    } else if (!raffle || hoursSinceLastDraw >= 24) {
+      // Create a new raffle entry if none exists or if 24 hours have passed
+      const newRaffleQuery = await pool.query(
+        'INSERT INTO raffles (user_id, draw_count, last_draw) VALUES ($1, $2, $3) RETURNING *',
+        [userId, 0, now]
+      );
+      raffle = newRaffleQuery.rows[0];
+    }
+
+    const rewardAmount = Math.floor(Math.random() * 100) + 10000; // Random reward between 10,000 and 1,000,000 coins
+    await pool.query('INSERT INTO raffle_rewards (raffle_id, reward_amount) VALUES ($1, $2)', [raffle.id, rewardAmount]);
+
+    await pool.query('UPDATE raffles SET draw_count = draw_count + 1, last_draw = $1 WHERE id = $2', [now, raffle.id]);
+    await pool.query('UPDATE users SET mount = mount + $1 WHERE id = $2', [rewardAmount, userId]);
+
+    res.json({ reward: rewardAmount });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
 });
