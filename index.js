@@ -43,6 +43,8 @@ app.post("/bonus", db.bonus);
 app.post("/sendInvite", db.sendInvite);
 app.post("/connect", db.connect);
 app.put("/users", db.updateUser);
+app.get('/raffle/status', db.checkRaffleStatus);
+app.post('/raffle/draw', db.performRaffleDraw);
 
 app.get("/", (req, res) => {
   res.send("Express on Vercel, yay");
