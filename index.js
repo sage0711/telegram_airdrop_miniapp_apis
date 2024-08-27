@@ -43,6 +43,7 @@ app.post("/bonus", db.bonus);
 app.post("/sendInvite", db.sendInvite);
 app.post("/connect", db.connect);
 app.put("/users", db.updateUser);
+app.post("/raffleinfo", db.getRaffleInfo);
 
 app.get("/", (req, res) => {
   res.send("Express on Vercel, yay");
@@ -303,13 +304,11 @@ schedule.scheduleJob(rule, async function () {
 });
 
 app.post('/raffle', async (req, res) => {
-  const { userId, useCoins } = req.body; // Accept a flag to indicate if coins should be used
-  console.log("userId", userId);
+  const { userId, useCoins } = req.body;
 
   try {
     const userQuery = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
     const user = userQuery.rows[0];
-    console.log("user-=-=-=", user)
 
     if (!user) return res.status(404).json({ message: 'User not found' });
 
@@ -317,19 +316,16 @@ app.post('/raffle', async (req, res) => {
     let raffle = raffleQuery.rows.length > 0 ? raffleQuery.rows[0] : null;
     
     const now = new Date();
-    const lastDraw = raffle ? new Date(raffle.last_draw) : now;
+    const lastDraw = raffle && raffle.draw_count > 2 ? new Date(raffle.last_draw) : now;
     const hoursSinceLastDraw = Math.abs(now - lastDraw) / 36e5;
 
-    // Check if the user can participate in the raffle
-    if (raffle && hoursSinceLastDraw < 24 && raffle.draw_count >= 3) {
-      if (useCoins && user.mount >= 10000) { // Require at least 10,000 coins to draw
-        // Deduct coins from user
+    if (raffle && hoursSinceLastDraw < 0.0001 && raffle.draw_count >= 3) {
+      if (useCoins && user.mount >= 10000) {
         await pool.query('UPDATE users SET mount = mount - 10000 WHERE id = $1', [userId]);
       } else {
         return res.status(403).json({ message: 'No more draws available today or insufficient coins' });
       }
-    } else if (!raffle || hoursSinceLastDraw >= 24) {
-      // Create a new raffle entry if none exists or if 24 hours have passed
+    } else if (!raffle || hoursSinceLastDraw >= 0.0001) {
       const newRaffleQuery = await pool.query(
         'INSERT INTO raffles (user_id, draw_count, last_draw) VALUES ($1, $2, $3) RETURNING *',
         [userId, 0, now]
@@ -337,10 +333,10 @@ app.post('/raffle', async (req, res) => {
       raffle = newRaffleQuery.rows[0];
     }
 
-    const rewardAmount = Math.floor(Math.random() * 100) + 10000; // Random reward between 10,000 and 1,000,000 coins
+    const rewardAmount = Math.floor(Math.random() * 1000);
     await pool.query('INSERT INTO raffle_rewards (raffle_id, reward_amount) VALUES ($1, $2)', [raffle.id, rewardAmount]);
 
-    await pool.query('UPDATE raffles SET draw_count = draw_count + 1, last_draw = $1 WHERE id = $2', [now, raffle.id]);
+    if(!useCoins) await pool.query('UPDATE raffles SET draw_count = draw_count + 1, last_draw = $1 WHERE id = $2', [now, raffle.id]);
     await pool.query('UPDATE users SET mount = mount + $1 WHERE id = $2', [rewardAmount, userId]);
 
     res.json({ reward: rewardAmount });

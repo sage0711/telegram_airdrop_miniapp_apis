@@ -68,13 +68,17 @@ const getBonusLevel = (request, response) => {
 const getBonusLevelById = (request, response) => {
   const id = parseInt(request.params.id);
 
-  pool.query("SELECT friend_value, premium_value FROM bonuslevel WHERE level_id = $1", [id], (error, results) => {
-    if (error) {
-      throw error;
+  pool.query(
+    "SELECT friend_value, premium_value FROM bonuslevel WHERE level_id = $1",
+    [id],
+    (error, results) => {
+      if (error) {
+        throw error;
+      }
+      response.status(200).json(results.rows);
     }
-    response.status(200).json(results.rows);
-  });
-}
+  );
+};
 
 const createUser = (request, response) => {
   const { user } = request.body;
@@ -235,7 +239,23 @@ const updateUser = async (request, response) => {
     console.error("Failed to update mount", error);
     response.status(500).json({ error: "Failed to update mount" });
   }
-}
+};
+
+const getRaffleInfo = (request, response) => {
+  const { userId } = request.body;
+  pool.query(
+    "SELECT * FROM raffles WHERE user_id = $1 ORDER BY id DESC LIMIT 1",
+    [userId],
+    (error, results) => {
+      if (error) {
+        throw error;
+      }
+      if (results.rows.length === 0)
+        return response.json({ stats: "no friend found" });
+      else return response.json({ stats: "success", items: results.rows });
+    }
+  );
+};
 
 module.exports = {
   getUsers,
@@ -249,4 +269,5 @@ module.exports = {
   sendInvite,
   connect,
   updateUser,
+  getRaffleInfo,
 };
