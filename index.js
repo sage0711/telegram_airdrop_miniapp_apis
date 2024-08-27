@@ -36,7 +36,7 @@ app.get("/users", db.getUsers);
 app.get("/tasks", db.getTasks);
 app.get("/users/:id", db.getUserById);
 app.get("/bonusLevel", db.getBonusLevel);
-app.get("/bonusLevel/:id", db.getBonusLevelById)
+app.get("/bonusLevel/:id", db.getBonusLevelById);
 app.post("/friends", db.getFriends);
 app.post("/users", db.createUser);
 app.post("/bonus", db.bonus);
@@ -303,47 +303,71 @@ schedule.scheduleJob(rule, async function () {
   });
 });
 
-app.post('/raffle', async (req, res) => {
+app.post("/raffle", async (req, res) => {
   const { userId, useCoins } = req.body;
 
   try {
-    const userQuery = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
+    const userQuery = await pool.query("SELECT * FROM users WHERE id = $1", [
+      userId,
+    ]);
     const user = userQuery.rows[0];
 
-    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-    const raffleQuery = await pool.query('SELECT * FROM raffles WHERE user_id = $1 ORDER BY id DESC LIMIT 1', [userId]);
+    const raffleQuery = await pool.query(
+      "SELECT * FROM raffles WHERE user_id = $1 ORDER BY id DESC LIMIT 1",
+      [userId]
+    );
     let raffle = raffleQuery.rows.length > 0 ? raffleQuery.rows[0] : null;
-    
+
     const now = new Date();
-    const lastDraw = raffle && raffle.draw_count > 2 ? new Date(raffle.last_draw) : now;
+    const lastDraw =
+      raffle && raffle.draw_count > 2 ? new Date(raffle.last_draw) : now;
     const hoursSinceLastDraw = Math.abs(now - lastDraw) / 36e5;
 
-    if (raffle && hoursSinceLastDraw < 0.0001 && raffle.draw_count >= 3) {
+    if (raffle && hoursSinceLastDraw < 24 && raffle.draw_count >= 3) {
       if (useCoins && user.mount >= 10000) {
-        await pool.query('UPDATE users SET mount = mount - 10000 WHERE id = $1', [userId]);
+        await pool.query(
+          "UPDATE users SET mount = mount - 10000 WHERE id = $1",
+          [userId]
+        );
+        const newRaffleQuery = await pool.query(
+          "INSERT INTO raffles (user_id, draw_count, last_draw) VALUES ($1, $2, $3) RETURNING *",
+          [userId, 0, now]
+        );
+        raffle = newRaffleQuery.rows[0];
       } else {
-        return res.status(403).json({ message: 'No more draws available today or insufficient coins' });
+        return res.status(403).json({
+          message: "No more draws available today or insufficient coins",
+        });
       }
-    } else if (!raffle || hoursSinceLastDraw >= 0.0001) {
+    } else if (!raffle || hoursSinceLastDraw >= 24) {
       const newRaffleQuery = await pool.query(
-        'INSERT INTO raffles (user_id, draw_count, last_draw) VALUES ($1, $2, $3) RETURNING *',
+        "INSERT INTO raffles (user_id, draw_count, last_draw) VALUES ($1, $2, $3) RETURNING *",
         [userId, 0, now]
       );
       raffle = newRaffleQuery.rows[0];
     }
 
     const rewardAmount = Math.floor(Math.random() * 1000);
-    await pool.query('INSERT INTO raffle_rewards (raffle_id, reward_amount) VALUES ($1, $2)', [raffle.id, rewardAmount]);
+    await pool.query(
+      "INSERT INTO raffle_rewards (raffle_id, reward_amount) VALUES ($1, $2)",
+      [raffle.id, rewardAmount]
+    );
 
-    if(!useCoins) await pool.query('UPDATE raffles SET draw_count = draw_count + 1, last_draw = $1 WHERE id = $2', [now, raffle.id]);
-    await pool.query('UPDATE users SET mount = mount + $1 WHERE id = $2', [rewardAmount, userId]);
+    if (!useCoins)
+      await pool.query(
+        "UPDATE raffles SET draw_count = draw_count + 1, last_draw = $1 WHERE id = $2",
+        [now, raffle.id]
+      );
+    await pool.query("UPDATE users SET mount = mount + $1 WHERE id = $2", [
+      rewardAmount,
+      userId,
+    ]);
 
     res.json({ reward: rewardAmount });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(500).json({ message: "Internal server error" });
   }
 });
-
-
