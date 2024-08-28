@@ -225,7 +225,9 @@ const updateUser = async (request, response) => {
         "INSERT INTO users (tgid, mount, friendid) VALUES ($1, $2, $3)",
         [user, 0, ""]
       );
-      return response.status(201).json({ message: "User created successfully" });
+      return response
+        .status(201)
+        .json({ message: "User created successfully" });
     }
 
     // Update the mount value for the user
@@ -251,8 +253,44 @@ const getRaffleInfo = (request, response) => {
         throw error;
       }
       if (results.rows.length === 0)
-        return response.json({ stats: "no friend found" });
+        return response.json({ stats: "no found user" });
       else return response.json({ stats: "success", items: results.rows });
+    }
+  );
+};
+
+const getRank = (request, response) => {
+  const { user } = request.body;
+  console.log(user)
+  pool.query(
+    "SELECT id, DENSE_RANK() OVER (ORDER BY mount DESC) AS rank FROM users WHERE tgid = $1",
+    [user], // Make sure `user` is defined and contains the tgid
+    (error, results) => {
+      if (error) {
+        throw error;
+      }
+
+      // Check if any rows were returned
+      if (results.rows.length > 0) {
+        response.status(200).json(results.rows[0].rank);
+      } else {
+        // Handle the case where no user is found with the given tgid
+        response.status(404).json({ error: "User not found" });
+      }
+    }
+  );
+};
+
+const getFriendsnumber = (request, response) => {
+  const { user } = request.body;
+  pool.query(
+    "SELECT id FROM users WHERE friendid = $1",
+    [user],
+    (error, results) => {
+      if (error) {
+        throw error;
+      }
+      response.status(200).json(results.rows.length);
     }
   );
 };
@@ -270,4 +308,6 @@ module.exports = {
   connect,
   updateUser,
   getRaffleInfo,
+  getRank,
+  getFriendsnumber,
 };
