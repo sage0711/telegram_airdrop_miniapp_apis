@@ -336,6 +336,9 @@ app.post("/raffle", async (req, res) => {
           [userId, 0, now]
         );
         raffle = newRaffleQuery.rows[0];
+        return res.status(200).json({
+          message: "Run the raffle.",
+        })
       } else {
         return res.status(403).json({
           message: "No more draws available today or insufficient coins",
@@ -347,7 +350,12 @@ app.post("/raffle", async (req, res) => {
         [userId, 0, now]
       );
       raffle = newRaffleQuery.rows[0];
+    } else if (useCoins) {
+      return res.status(403).json({
+        message: "There are still free draws left.",
+      })
     }
+
 
     const rewardAmount = Math.floor(Math.random() * 1000);
     await pool.query(
