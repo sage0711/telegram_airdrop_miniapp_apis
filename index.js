@@ -158,7 +158,6 @@ bot.command("start", async (ctx) => {
         throw error;
       }
       let user = results1.rows[0];
-      console.log("user", user);
 
       if (!user && !receiveid) {
         pool.query(
