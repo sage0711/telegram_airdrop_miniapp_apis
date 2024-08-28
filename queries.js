@@ -261,20 +261,20 @@ const getRaffleInfo = (request, response) => {
 
 const getRank = (request, response) => {
   const { user } = request.body;
-  console.log(user)
   pool.query(
-    "SELECT id, DENSE_RANK() OVER (ORDER BY mount DESC) AS rank FROM users WHERE tgid = $1",
-    [user], // Make sure `user` is defined and contains the tgid
+    `SELECT rank FROM (
+    SELECT tgid, DENSE_RANK() OVER (ORDER BY mount DESC) AS rank
+    FROM users
+  ) AS ranked_users WHERE tgid = $1`,
+    [user],
     (error, results) => {
       if (error) {
         throw error;
       }
-
-      // Check if any rows were returned
+      console.log(results.rows);
       if (results.rows.length > 0) {
         response.status(200).json(results.rows[0].rank);
       } else {
-        // Handle the case where no user is found with the given tgid
         response.status(404).json({ error: "User not found" });
       }
     }
