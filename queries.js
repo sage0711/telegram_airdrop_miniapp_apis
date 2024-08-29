@@ -329,6 +329,66 @@ const getStoreItems = (req, res) => {
   });
 };
 
+const updateProfit = async (req, res) => {
+  const { user, amount, price, itemId } = req.body;
+
+  try {
+    const data = await pool.query("SELECT * FROM users WHERE tgid = $1", [
+      user,
+    ]);
+
+    const userResult = data.rows[0];
+    const userId = userResult.id;
+
+    if (!userResult)
+      return res.status(404).json({ stats: false, message: "User not found" });
+
+    if (Number(userResult.mount) < Number(price))
+      return res
+        .status(200)
+        .json({ stats: false, message: "There are not enough coins." });
+
+    await pool.query(
+      "UPDATE users SET profit = profit + $1, mount = mount - $2 WHERE tgid = $3",
+      [amount, price, user]
+    );
+    const updatedata = await pool.query("SELECT * FROM users WHERE tgid = $1", [
+      user,
+    ]);
+    let currentmount = updatedata.rows[0].mount;
+
+    const checkQuery = `
+      SELECT * FROM user_store_items 
+      WHERE user_id = $1 AND item_id = $2
+    `;
+    const { rows } = await pool.query(checkQuery, [userId, itemId]);
+
+    if (rows.length > 0) {
+      const updateQuery = `
+        UPDATE user_store_items 
+        SET product_level = product_level + 1, purchase_date = CURRENT_TIMESTAMP 
+        WHERE user_id = $1 AND item_id = $2
+      `;
+      await pool.query(updateQuery, [userId, itemId]);
+    } else {
+      const insertQuery = `
+        INSERT INTO user_store_items (user_id, item_id, product_level, purchase_date) 
+        VALUES ($1, $2, 2, CURRENT_TIMESTAMP)
+      `;
+      await pool.query(insertQuery, [userId, itemId]);
+    }
+
+    res.json({
+      stats: true,
+      message: "profit has been successfully updated.",
+      updatemount: currentmount,
+    });
+  } catch (err) {
+    console.error("Failed to update mount", err);
+    res.status(500).json({ error: "Failed to update profit" });
+  }
+};
+
 module.exports = {
   getUsers,
   getTasks,
@@ -345,4 +405,5 @@ module.exports = {
   getRank,
   getFriendsnumber,
   getStoreItems,
+  updateProfit,
 };
