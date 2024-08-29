@@ -320,11 +320,13 @@ app.post("/raffle", async (req, res) => {
       [userId]
     );
     let raffle = raffleQuery.rows.length > 0 ? raffleQuery.rows[0] : null;
+    let nowmount = Number(user.mount);
 
     const now = new Date();
     const lastDraw =
       raffle && raffle.draw_count > 2 ? new Date(raffle.last_draw) : now;
     const hoursSinceLastDraw = Math.abs(now - lastDraw) / 36e5;
+    
 
     if (raffle && hoursSinceLastDraw < 24 && raffle.draw_count >= 3) {
       if (useCoins && user.mount >= 10000) {
@@ -337,12 +339,15 @@ app.post("/raffle", async (req, res) => {
           [userId, 0, now]
         );
         raffle = newRaffleQuery.rows[0];
+        nowmount -= Number(10000);
         return res.status(200).json({
           message: "Run the raffle.",
-        })
+          updatemount: nowmount
+        });
       } else {
-        return res.status(403).json({
+        return res.status(200).json({
           message: "No more draws available today or insufficient coins",
+          updatemount: nowmount
         });
       }
     } else if (!raffle || hoursSinceLastDraw >= 24) {
@@ -352,11 +357,11 @@ app.post("/raffle", async (req, res) => {
       );
       raffle = newRaffleQuery.rows[0];
     } else if (useCoins) {
-      return res.status(403).json({
+      return res.status(200).json({
         message: "There are still free draws left.",
-      })
+        updatemount: nowmount
+      });
     }
-
 
     const rewardAmount = Math.floor(Math.random() * 1000);
     await pool.query(
@@ -364,17 +369,17 @@ app.post("/raffle", async (req, res) => {
       [raffle.id, rewardAmount]
     );
 
-    if (!useCoins)
-      await pool.query(
-        "UPDATE raffles SET draw_count = draw_count + 1, last_draw = $1 WHERE id = $2",
-        [now, raffle.id]
-      );
+    await pool.query(
+      "UPDATE raffles SET draw_count = draw_count + 1, last_draw = $1 WHERE id = $2",
+      [now, raffle.id]
+    );
     await pool.query("UPDATE users SET mount = mount + $1 WHERE id = $2", [
       rewardAmount,
       userId,
     ]);
 
-    res.json({ reward: rewardAmount });
+    nowmount += Number(rewardAmount);
+    res.json({ reward: rewardAmount, updatemount: nowmount });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Internal server error" });
