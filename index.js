@@ -6,6 +6,7 @@ const cors = require("cors");
 const db = require("./queries");
 const Pool = require("pg").Pool;
 const schedule = require("node-schedule");
+const cron = require("node-cron");
 require("dotenv").config();
 
 const rule = new schedule.RecurrenceRule();
@@ -274,37 +275,33 @@ bot.on("callback_query:data", async (ctx) => {
   bot.start();
 })();
 
-schedule.scheduleJob(rule, async function () {
-  console.log("start reward");
-  pool.query("SELECT * FROM users ORDER BY id ASC", (error, results) => {
-    if (error) throw error;
-    let statements = results.rows
-      .map((x) => {
-        rewardPerHour = getLevelInfo(x.mount).number * 20000;
-        console.log("reward->", rewardPerHour);
-        return `WHEN '${x.tgid}' THEN mount + ${rewardPerHour}`;
-      })
-      .join(" ");
-    let users = results.rows
-      .map((x) => {
-        rewardPerHour = getLevelInfo(x.mount).number * 20000;
-        console.log("reward->", getLevelInfo(x.mount));
-        return `'${x.tgid}'`;
-      })
-      .join(", ");
-    console.log("state", statements, users);
-    pool.query(
-      `UPDATE users SET mount = CASE tgid ${statements} END WHERE tgid IN (${users})`,
-      [],
-      (error) => {
-        if (error) {
-          throw error;
+async function updateMountForAllUsers() {
+  try {
+    const users = await pool.query("SELECT id, tgid, profit FROM users");
+
+    for (const user of users.rows) {
+      const { id, tgid, profit } = user;
+
+      const intervalTime = (3600 / profit) * 1000;
+
+      setInterval(async () => {
+        try {
+          const result = await pool.query(
+            "UPDATE users SET mount = mount + 1 WHERE id = $1 RETURNING mount",
+            [id]
+          );
+        } catch (error) {
+          console.error(`Error updating mount for user ${tgid}:`, error);
         }
-        console.log("reward updated");
-      }
-    );
-  });
-});
+      }, intervalTime);
+    }
+  } catch (error) {
+    console.error("Error fetching users:", error);
+  }
+}
+
+// Start the automatic update process when the server starts
+updateMountForAllUsers();
 
 app.post("/raffle", async (req, res) => {
   const { userId, useCoins } = req.body;
@@ -328,7 +325,6 @@ app.post("/raffle", async (req, res) => {
     const lastDraw =
       raffle && raffle.draw_count > 2 ? new Date(raffle.last_draw) : now;
     const hoursSinceLastDraw = Math.abs(now - lastDraw) / 36e5;
-    
 
     if (raffle && hoursSinceLastDraw < 24 && raffle.draw_count >= 3) {
       if (useCoins && user.mount >= 10000) {
@@ -344,12 +340,12 @@ app.post("/raffle", async (req, res) => {
         nowmount -= Number(10000);
         return res.status(200).json({
           message: "Run the raffle.",
-          updatemount: nowmount
+          updatemount: nowmount,
         });
       } else {
         return res.status(200).json({
           message: "No more draws available today or insufficient coins",
-          updatemount: nowmount
+          updatemount: nowmount,
         });
       }
     } else if (!raffle || hoursSinceLastDraw >= 24) {
@@ -361,7 +357,7 @@ app.post("/raffle", async (req, res) => {
     } else if (useCoins) {
       return res.status(200).json({
         message: "There are still free draws left.",
-        updatemount: nowmount
+        updatemount: nowmount,
       });
     }
 
