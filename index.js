@@ -46,6 +46,7 @@ app.put("/users", db.updateUser);
 app.post("/raffleinfo", db.getRaffleInfo);
 app.post("/globalrank", db.getRank);
 app.post("/friendsnumber", db.getFriendsnumber);
+app.post("/storeitems", db.getStoreItems);
 
 app.get("/", (req, res) => {
   res.send("Express on Vercel, yay");

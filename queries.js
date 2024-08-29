@@ -295,6 +295,40 @@ const getFriendsnumber = (request, response) => {
   );
 };
 
+const getStoreItems = (req, res) => {
+  const { user, storeId } = req.body;
+  const query = `
+   SELECT 
+        si.id AS item_id,
+        si.name AS item_name,
+        s.name AS store_name, 
+        si.image_path,
+        si.purchase_amount[COALESCE(usi.product_level, 1)] AS purchase_amount, 
+        si.payment_amount[COALESCE(usi.product_level, 1)] AS payment_amount, 
+        si.required_user_level,
+        COALESCE(usi.product_level, 1) AS product_level,
+        usi.purchase_date
+    FROM 
+        store_items si
+    LEFT JOIN 
+        user_store_items usi ON si.id = usi.item_id AND usi.user_id = (
+            SELECT id FROM users WHERE tgid = $1 
+        ) 
+    JOIN 
+        stores s ON si.store_id = s.id
+    WHERE 
+        s.id = $2
+    ORDER BY 
+        si.id;
+  `;
+  pool.query(query, [user, storeId], (error, results) => {
+    if (error) {
+      throw error;
+    }
+    res.status(200).json(results.rows);
+  });
+};
+
 module.exports = {
   getUsers,
   getTasks,
@@ -310,4 +344,5 @@ module.exports = {
   getRaffleInfo,
   getRank,
   getFriendsnumber,
+  getStoreItems,
 };
