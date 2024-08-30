@@ -271,7 +271,6 @@ const getRank = (request, response) => {
       if (error) {
         throw error;
       }
-      console.log(results.rows);
       if (results.rows.length > 0) {
         response.status(200).json(results.rows[0].rank);
       } else {
@@ -389,6 +388,15 @@ const updateProfit = async (req, res) => {
   }
 };
 
+const getLeaderboard = (request, response) => {
+  pool.query("SELECT * FROM users ORDER BY mount DESC LIMIT 10", (error, results) => {
+    if(error) {
+      throw error;
+    }
+    response.status(200).json(results.rows)
+  })
+};
+
 module.exports = {
   getUsers,
   getTasks,
@@ -406,4 +414,5 @@ module.exports = {
   getFriendsnumber,
   getStoreItems,
   updateProfit,
+  getLeaderboard,
 };

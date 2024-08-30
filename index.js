@@ -10,7 +10,7 @@ const cron = require("node-cron");
 require("dotenv").config();
 
 const rule = new schedule.RecurrenceRule();
-// rule.hour = 0;
+rule.hour = 0;
 rule.minute = 0;
 rule.second = 0;
 rule.tz = "America/Toronto";
@@ -49,6 +49,7 @@ app.post("/globalrank", db.getRank);
 app.post("/friendsnumber", db.getFriendsnumber);
 app.post("/storeitems", db.getStoreItems);
 app.post("/profit", db.updateProfit);
+app.get("/leaderboard", db.getLeaderboard);
 
 app.get("/", (req, res) => {
   res.send("Express on Vercel, yay");
@@ -149,8 +150,6 @@ bot.command("start", async (ctx) => {
 
     const file = await ctx.api.getFile(file_id);
     fileUrl = `https://api.telegram.org/file/bot${botToken}/${file.file_path}`;
-
-    console.log("User's avatar URL:", fileUrl);
   } else {
     console.log("No profile photos found for this user.");
   }
@@ -172,7 +171,6 @@ bot.command("start", async (ctx) => {
       }
 
       if (!user && receiveid) {
-        // First, retrieve the sender's details to determine their current mount value
         pool.query(
           "SELECT * FROM users WHERE tgid = $1",
           [receiveid],
@@ -275,33 +273,66 @@ bot.on("callback_query:data", async (ctx) => {
   bot.start();
 })();
 
-async function updateMountForAllUsers() {
+app.use(express.json());
+
+async function updateUserMount(user) {
+  const { id, tgid } = user;
+
+  let currentInterval;
+
+  const updateMount = async () => {
+    try {
+      const { rows } = await pool.query("SELECT profit FROM users WHERE id = $1", [id]);
+      const profit = rows[0].profit;
+
+      if (profit > 0) {
+        const intervalTime = (3600 / profit) * 1000;
+
+        if (currentInterval) {
+          clearInterval(currentInterval);
+        }
+
+        currentInterval = setInterval(async () => {
+          try {
+            const result = await pool.query(
+              "UPDATE users SET mount = mount + 1 WHERE id = $1 RETURNING mount",
+              [id]
+            );
+
+            console.log(`Updated mount for user ${tgid}: ${result.rows[0].mount}`);
+          } catch (error) {
+            console.error(`Error updating mount for user ${tgid}:`, error);
+          }
+        }, intervalTime);
+      } else {
+        console.log(`Skipping updates for user ${tgid} due to zero profit.`);
+        if (currentInterval) {
+          clearInterval(currentInterval);
+        }
+      }
+    } catch (error) {
+      console.error(`Error fetching profit for user ${tgid}:`, error);
+    }
+  };
+
+  await updateMount();
+
+  setInterval(updateMount, 1000);
+}
+
+async function startUpdatingMounts() {
   try {
     const users = await pool.query("SELECT id, tgid, profit FROM users");
 
-    for (const user of users.rows) {
-      const { id, tgid, profit } = user;
-
-      const intervalTime = (3600 / profit) * 1000;
-
-      setInterval(async () => {
-        try {
-          const result = await pool.query(
-            "UPDATE users SET mount = mount + 1 WHERE id = $1 RETURNING mount",
-            [id]
-          );
-        } catch (error) {
-          console.error(`Error updating mount for user ${tgid}:`, error);
-        }
-      }, intervalTime);
-    }
+    users.rows.forEach((user) => {
+      updateUserMount(user);
+    });
   } catch (error) {
     console.error("Error fetching users:", error);
   }
 }
 
-// Start the automatic update process when the server starts
-updateMountForAllUsers();
+startUpdatingMounts();
 
 app.post("/raffle", async (req, res) => {
   const { userId, useCoins } = req.body;
